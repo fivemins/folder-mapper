@@ -35,11 +35,20 @@ python3 scripts/map_folder.py list
 # 取消映射
 python3 scripts/map_folder.py unmount <文件夹名>
 
+# 清理所有映射
+python3 scripts/map_folder.py clean
+
 # 添加禁止目录
 python3 scripts/map_folder.py forbid "/path/to/secure"
 
 # 添加敏感目录
 python3 scripts/map_folder.py sensitive "/path/to/important"
+
+# 移除禁止目录
+python3 scripts/map_folder.py allow "/path/to/secure"
+
+# 移除敏感目录
+python3 scripts/map_folder.py desensitive "/path/to/important"
 
 # 查看配置
 python3 scripts/map_folder.py config
@@ -88,11 +97,20 @@ python3 scripts/map_folder.py list
 # Unmount
 python3 scripts/map_folder.py unmount <folder_name>
 
+# Clean all mappings
+python3 scripts/map_folder.py clean
+
 # Add forbidden directory
 python3 scripts/map_folder.py forbid "/path/to/secure"
 
 # Add sensitive directory
 python3 scripts/map_folder.py sensitive "/path/to/important"
+
+# Remove forbidden directory
+python3 scripts/map_folder.py allow "/path/to/secure"
+
+# Remove sensitive directory
+python3 scripts/map_folder.py desensitive "/path/to/important"
 
 # View configuration
 python3 scripts/map_folder.py config

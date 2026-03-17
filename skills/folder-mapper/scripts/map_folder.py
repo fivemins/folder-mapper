@@ -5,6 +5,7 @@
 import os
 import sys
 import json
+import re
 from pathlib import Path
 
 WORKSPACE = Path.home() / ".openclaw" / "workspace"
@@ -33,6 +34,9 @@ DEFAULT_FORBIDDEN = [
 # 添加所有可能的盘符挂载点（/mnt/a 到 /mnt/z）
 for letter in 'abcdefghijklmnopqrstuvwxyz':
     DEFAULT_FORBIDDEN.append(f"/mnt/{letter}")
+
+WINDOWS_DRIVE_ROOT_RE = re.compile(r'^[A-Za-z]:\\?$')
+WINDOWS_DRIVE_PATH_RE = re.compile(r'^[A-Za-z]:\\')
 
 
 def ensure_workspace_files():
@@ -116,12 +120,20 @@ def show_config():
     print("\n📋 当前配置:")
     print("-" * 50)
     print(f"系统默认禁止目录 ({len(DEFAULT_FORBIDDEN)}): {', '.join(DEFAULT_FORBIDDEN[:5])}...")
-    print(f"\n用户禁止目录 ({len(config.get('forbidden_paths', []))}):")
-    for p in config.get("forbidden_paths", []):
+    forbidden_paths = config.get("forbidden_paths", [])
+    sensitive_paths = config.get("sensitive_paths", [])
+
+    print(f"\n用户禁止目录 ({len(forbidden_paths)}):")
+    for p in forbidden_paths:
         print(f"  🚫 {p}")
-    print(f"\n敏感目录 ({len(config.get('sensitive_paths', []))}):")
-    for p in config.get("sensitive_paths", []):
+    if not forbidden_paths:
+        print("  (无)")
+
+    print(f"\n敏感目录 ({len(sensitive_paths)}):")
+    for p in sensitive_paths:
         print(f"  ⚠️  {p}")
+    if not sensitive_paths:
+        print("  (无)")
     print("-" * 50)
 
 
@@ -168,16 +180,12 @@ def is_path_allowed(path: str) -> tuple:
     config = load_config()
     path_str = str(p)
     
-    # 检查 Windows 盘符根目录（如 C:\, D:\）
-    import re
     # 检测 Windows 风格路径：C:\, D:\ 等
-    if re.match(r'^[A-Za-z]:\\?$', path_str):
+    if WINDOWS_DRIVE_ROOT_RE.match(path_str):
         return False, f"禁止映射盘符根目录: {path_str}"
     
     # 检查 Windows 盘符下的根目录（如 C:\Users, D:\Program Files）
-    if re.match(r'^[A-Za-z]:\\', path_str):
-        # 提取盘符
-        drive = path_str[0].upper()
+    if WINDOWS_DRIVE_PATH_RE.match(path_str):
         # 检查是否映射到盘符根目录
         if path_str[3:] == '' or path_str[3:] == '\\':
             return False, f"禁止映射盘符根目录: {path_str}"
