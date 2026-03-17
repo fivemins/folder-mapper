@@ -25,36 +25,50 @@ npx skills add fivemins/folder-mapper
 
 ### 使用方法
 
+示例默认在仓库根目录执行。
+
+```bash
+# 最小自检：验证脚本路径
+python3 skills/folder-mapper/scripts/map_folder.py list
+```
+
 ```bash
 # 映射文件夹
-python3 scripts/map_folder.py mount "/path/to/folder"
+python3 skills/folder-mapper/scripts/map_folder.py mount "/path/to/folder"
 
 # 查看当前映射
-python3 scripts/map_folder.py list
+python3 skills/folder-mapper/scripts/map_folder.py list
 
 # 取消映射
-python3 scripts/map_folder.py unmount <文件夹名>
+python3 skills/folder-mapper/scripts/map_folder.py unmount <文件夹名>
 
 # 清理所有映射
-python3 scripts/map_folder.py clean
+python3 skills/folder-mapper/scripts/map_folder.py clean
 
 # 添加禁止目录
-python3 scripts/map_folder.py forbid "/path/to/secure"
+python3 skills/folder-mapper/scripts/map_folder.py forbid "/path/to/secure"
 
 # 添加敏感目录
-python3 scripts/map_folder.py sensitive "/path/to/important"
+python3 skills/folder-mapper/scripts/map_folder.py sensitive "/path/to/important"
 
 # 移除禁止目录
-python3 scripts/map_folder.py allow "/path/to/secure"
+python3 skills/folder-mapper/scripts/map_folder.py allow "/path/to/secure"
 
 # 移除敏感目录
-python3 scripts/map_folder.py desensitive "/path/to/important"
+python3 skills/folder-mapper/scripts/map_folder.py desensitive "/path/to/important"
 
 # 风险检测（按需触发确认）
-python3 scripts/map_folder.py guard delete "/path/to/important/file"
+python3 skills/folder-mapper/scripts/map_folder.py guard delete "/path/to/important/file"
 
 # 查看配置
-python3 scripts/map_folder.py config
+python3 skills/folder-mapper/scripts/map_folder.py config
+```
+
+或进入脚本目录运行：
+
+```bash
+cd skills/folder-mapper/scripts
+python3 map_folder.py list
 ```
 
 
@@ -99,36 +113,50 @@ npx skills add fivemins/folder-mapper
 
 ### Usage
 
+Examples assume you run commands from the repository root.
+
+```bash
+# Minimal self-check: verify script path
+python3 skills/folder-mapper/scripts/map_folder.py list
+```
+
 ```bash
 # Map a folder
-python3 scripts/map_folder.py mount "/path/to/folder"
+python3 skills/folder-mapper/scripts/map_folder.py mount "/path/to/folder"
 
 # List current mappings
-python3 scripts/map_folder.py list
+python3 skills/folder-mapper/scripts/map_folder.py list
 
 # Unmount
-python3 scripts/map_folder.py unmount <folder_name>
+python3 skills/folder-mapper/scripts/map_folder.py unmount <folder_name>
 
 # Clean all mappings
-python3 scripts/map_folder.py clean
+python3 skills/folder-mapper/scripts/map_folder.py clean
 
 # Add forbidden directory
-python3 scripts/map_folder.py forbid "/path/to/secure"
+python3 skills/folder-mapper/scripts/map_folder.py forbid "/path/to/secure"
 
 # Add sensitive directory
-python3 scripts/map_folder.py sensitive "/path/to/important"
+python3 skills/folder-mapper/scripts/map_folder.py sensitive "/path/to/important"
 
 # Remove forbidden directory
-python3 scripts/map_folder.py allow "/path/to/secure"
+python3 skills/folder-mapper/scripts/map_folder.py allow "/path/to/secure"
 
 # Remove sensitive directory
-python3 scripts/map_folder.py desensitive "/path/to/important"
+python3 skills/folder-mapper/scripts/map_folder.py desensitive "/path/to/important"
 
 # Risk check (optional confirmation gate)
-python3 scripts/map_folder.py guard delete "/path/to/important/file"
+python3 skills/folder-mapper/scripts/map_folder.py guard delete "/path/to/important/file"
 
 # View configuration
-python3 scripts/map_folder.py config
+python3 skills/folder-mapper/scripts/map_folder.py config
+```
+
+Or run from the script directory:
+
+```bash
+cd skills/folder-mapper/scripts
+python3 map_folder.py list
 ```
 
 
