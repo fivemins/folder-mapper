@@ -159,6 +159,11 @@ def is_same_or_subpath(path: str, base: str) -> bool:
         return False
 
 
+def is_exact_path(path: str, target: str) -> bool:
+    """检查 path 与 target 是否为同一路径"""
+    return Path(path) == Path(target)
+
+
 def is_path_allowed(path: str) -> tuple:
     """
     检查路径是否允许映射
@@ -184,12 +189,15 @@ def is_path_allowed(path: str) -> tuple:
     
     # 检查默认黑名单
     for forbidden in DEFAULT_FORBIDDEN:
-        # "/" 仅阻止根目录本身；其余目录阻止自身及其子目录
-        if forbidden == "/":
-            if path_str == "/":
-                return False, "禁止映射系统目录: /"
+        forbidden_path = str(Path(forbidden))
+
+        # 根目录仅阻止自身，避免将所有绝对路径都误判为子路径
+        if forbidden_path == Path(forbidden_path).anchor:
+            if is_exact_path(path_str, forbidden_path):
+                return False, f"禁止映射系统目录: {forbidden}"
             continue
-        if is_same_or_subpath(path_str, forbidden):
+
+        if is_same_or_subpath(path_str, forbidden_path):
             return False, f"禁止映射系统目录: {forbidden}"
     
     # 检查用户黑名单
