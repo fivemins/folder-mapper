@@ -295,8 +295,24 @@ def unmount_folder(link_name: str) -> dict:
 def list_mappings() -> dict:
     ensure_mount_dir()
     mappings = load_mappings()
-    active = []
     
+    # 如果映射文件为空/损坏，尝试从实际符号链接恢复
+    if not mappings and MOUNT_DIR.exists():
+        for item in MOUNT_DIR.iterdir():
+            if item.is_symlink():
+                target = item.resolve()
+                if target.exists() and target.is_dir():
+                    # 从实际符号链接恢复映射记录
+                    mappings[item.name] = {
+                        "source": str(target),
+                        "link": str(item),
+                        "read_only": True,
+                        "sensitive": False,
+                    }
+        if mappings:
+            save_mappings(mappings)
+    
+    active = []
     stale = []
     for name, info in mappings.items():
         link_path = Path(info["link"])
