@@ -289,49 +289,73 @@ def is_same_or_subpath(path: str, base: str) -> bool:
         return False
 
 
+def normalize_path(raw_path: str) -> tuple[Path | None, str | None]:
+    """路径规范化策略：输入必须是原始字符串；返回 (绝对 Path, 错误信息)。"""
+    if WINDOWS_DRIVE_ROOT_RE.match(raw_path):
+        return None, f"禁止映射盘符根目录: {raw_path}"
+    return Path(raw_path).expanduser().resolve(), None
+
+
+def is_forbidden_path(path_str: str, config: dict) -> tuple[bool, str]:
+    """禁止判定策略：输入必须是规范化后的绝对路径字符串。"""
+    for forbidden in DEFAULT_FORBIDDEN:
+        # "/" 仅阻止根目录本身；其余目录阻止自身及其子目录
+        if forbidden == "/":
+            if path_str == "/":
+                return True, "禁止映射系统目录: /"
+            continue
+        if is_same_or_subpath(path_str, forbidden):
+            return True, f"禁止映射系统目录: {forbidden}"
+
+    for forbidden in config.get("forbidden_paths", []):
+        if is_same_or_subpath(path_str, forbidden):
+            return True, f"用户禁止映射: {forbidden}"
+
+    return False, ""
+
+
 def is_sensitive_path(path_str: str, config: dict) -> bool:
-    """根据配置判断路径是否属于敏感目录。"""
+    """敏感判定策略：输入必须是规范化后的绝对路径字符串。"""
     return any(
         is_same_or_subpath(path_str, sensitive_path)
         for sensitive_path in config.get("sensitive_paths", [])
     )
 
 
-def is_path_allowed(raw_input: str) -> tuple:
-    """
-    检查路径是否允许映射
-    返回: (允许, 原因)
-    """
-    # 先检查用户输入的原始字符串，而不是 resolve() 后的规范化路径。
-    # 原因：在 Linux 上 resolve() 会把 "C:\\" 等字符串当作普通文件名处理，
-    # 变成 "<cwd>/C:\\"，从而丢失“它原本是 Windows 盘符路径”的语义。
-    # 因此要先基于原始输入拦截 Windows 盘符根目录，再对普通路径做规范化与黑名单检查。
-    if WINDOWS_DRIVE_ROOT_RE.match(raw_input):
-        return False, f"禁止映射盘符根目录: {raw_input}", None
+def classify_path(raw_input: str, config: dict | None = None) -> dict:
+    """统一路径分类策略：输入必须是原始字符串，返回规范化结果与风险标签。"""
+    if config is None:
+        config = load_config()
 
-    p = Path(raw_input).expanduser().resolve()
-    config = load_config()
-    path_str = str(p)
-    
-    # 检查默认黑名单
-    for forbidden in DEFAULT_FORBIDDEN:
-        # "/" 仅阻止根目录本身；其余目录阻止自身及其子目录
-        if forbidden == "/":
-            if path_str == "/":
-                return False, "禁止映射系统目录: /", p
-            continue
-        if is_same_or_subpath(path_str, forbidden):
-            return False, f"禁止映射系统目录: {forbidden}", p
-    
-    # 检查用户黑名单
-    for forbidden in config.get("forbidden_paths", []):
-        if is_same_or_subpath(path_str, forbidden):
-            return False, f"用户禁止映射: {forbidden}", p
-    
-    # 检查是否敏感
-    is_sensitive = is_sensitive_path(path_str, config)
-    
-    return True, "sensitive" if is_sensitive else "ok", p
+    path_obj, normalize_error = normalize_path(raw_input)
+    if path_obj is None:
+        return {
+            "allowed": False,
+            "reason": normalize_error,
+            "path": None,
+            "path_str": None,
+            "is_sensitive": False,
+        }
+
+    path_str = str(path_obj)
+    sensitive = is_sensitive_path(path_str, config)
+    forbidden, forbidden_reason = is_forbidden_path(path_str, config)
+    if forbidden:
+        return {
+            "allowed": False,
+            "reason": forbidden_reason,
+            "path": path_obj,
+            "path_str": path_str,
+            "is_sensitive": sensitive,
+        }
+
+    return {
+        "allowed": True,
+        "reason": "sensitive" if sensitive else "ok",
+        "path": path_obj,
+        "path_str": path_str,
+        "is_sensitive": sensitive,
+    }
 
 
 def get_unique_name(folder_path: Path) -> str:
@@ -346,11 +370,11 @@ def get_unique_name(folder_path: Path) -> str:
 
 
 def mount_folder(folder_path: str) -> dict:
-    raw_input = folder_path
-    allowed, reason, path = is_path_allowed(raw_input)
-    if not allowed:
-        return {"success": False, "error": reason}
+    result = classify_path(folder_path)
+    if not result["allowed"]:
+        return {"success": False, "error": result["reason"]}
 
+    path = result["path"]
     assert path is not None
 
     if not path.exists():
@@ -360,7 +384,7 @@ def mount_folder(folder_path: str) -> dict:
         return {"success": False, "error": f"不是有效文件夹: {path}"}
     
     sensitive_warning = ""
-    if reason == "sensitive":
+    if result["is_sensitive"]:
         sensitive_warning = f"\n⚠️ 警告: 该目录需要二次确认！"
     
     link_name = get_unique_name(path)
@@ -373,7 +397,7 @@ def mount_folder(folder_path: str) -> dict:
             mappings[link_name] = {
                 "source": str(path),
                 "link": str(link_path),
-                "sensitive": reason == "sensitive",
+                "sensitive": result["is_sensitive"],
             }
             return mappings
 
@@ -448,7 +472,7 @@ def list_mappings() -> dict:
                     mappings[item.name] = {
                         "source": str(target),
                         "link": str(item),
-                        "sensitive": is_sensitive_path(str(target), config),
+                        "sensitive": classify_path(str(target), config)["is_sensitive"],
                     }
         if mappings:
             save_mappings(mappings)
@@ -489,12 +513,19 @@ def list_mappings() -> dict:
 
 def check_dangerous_operation(path: str, operation: str) -> tuple:
     mappings = load_mappings()
-    normalized_path = str(Path(path).expanduser().resolve())
+    path_info = classify_path(path)
+    normalized_path = path_info["path_str"]
     normalized_operation = operation.strip().lower()
+
+    if not normalized_path:
+        return True, f"⚠️ 路径判定异常: {path_info['reason']}"
+
+    current_sensitive = path_info["is_sensitive"]
     
     for name, info in mappings.items():
         source = info.get("source", "")
-        sensitive = info.get("sensitive", False)
+        source_info = classify_path(source)
+        sensitive = source_info["is_sensitive"] or current_sensitive
         
         if is_same_or_subpath(normalized_path, source):
             if sensitive:
