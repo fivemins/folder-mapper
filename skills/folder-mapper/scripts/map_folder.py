@@ -251,7 +251,7 @@ def get_unique_name(folder_path: Path) -> str:
     return name
 
 
-def mount_folder(folder_path: str, read_only: bool = True) -> dict:
+def mount_folder(folder_path: str) -> dict:
     path = Path(folder_path).expanduser().resolve()
     
     if not path.exists():
@@ -278,7 +278,6 @@ def mount_folder(folder_path: str, read_only: bool = True) -> dict:
         mappings[link_name] = {
             "source": str(path),
             "link": str(link_path),
-            "read_only": read_only,
             "sensitive": reason == "sensitive",
         }
         save_mappings(mappings)
@@ -290,7 +289,7 @@ def mount_folder(folder_path: str, read_only: bool = True) -> dict:
             "access_path": f"mnt/{link_name}",
             "source": str(path),
             "warning": sensitive_warning,
-            "message": f"✅ 已映射到 mnt/{link_name} (安全映射模式){sensitive_warning}\n⚠️ 警告：此为符号链接，删除/修改会直接影响原文件！"
+            "message": f"✅ 已映射到 mnt/{link_name} (安全映射（非强制只读）){sensitive_warning}\n⚠️ 警告：此为符号链接，删除/修改会直接影响原文件！"
         }
         
     except Exception as e:
@@ -341,7 +340,6 @@ def list_mappings() -> dict:
                     mappings[item.name] = {
                         "source": str(target),
                         "link": str(item),
-                        "read_only": True,
                         "sensitive": False,
                     }
         if mappings:
@@ -438,7 +436,7 @@ def show_usage():
 📁 文件夹映射工具 (用户可配置版)
 
 用法:
-  python3 map_folder.py mount <路径>      映射文件夹（安全映射）
+  python3 map_folder.py mount <路径>      映射文件夹（安全映射，非强制只读）
   python3 map_folder.py unmount <名称>    取消映射
   python3 map_folder.py list             查看当前映射
   python3 map_folder.py clean            清理所有映射

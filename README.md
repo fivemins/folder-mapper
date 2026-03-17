@@ -11,7 +11,7 @@
 ### 特性
 
 - 🔗 将外部文件夹映射到工作空间（符号链接）
-- 🔒 默认只读模式
+- 🔒 安全映射（非强制只读）
 - 🛡️ 系统目录保护（禁止映射危险目录）
 - 🚫 盘符根目录保护（禁止映射 `/mnt/c`, `/mnt/d` 等所有盘符挂载点）
 - ⚙️ 用户可配置禁止/敏感目录
@@ -57,6 +57,13 @@ python3 scripts/map_folder.py guard delete "/path/to/important/file"
 python3 scripts/map_folder.py config
 ```
 
+
+### 注意事项
+
+- 当前映射基于符号链接，**不是**内核级强制只读挂载。
+- 通过映射路径进行写入、删除、重命名会直接作用于源目录。
+- 建议在高风险操作前先使用 `guard` 做风险检测。
+
 ### 安全机制
 
 | 机制 | 说明 |
@@ -65,7 +72,7 @@ python3 scripts/map_folder.py config
 | 盘符保护 | `/mnt/a` 到 `/mnt/z` 全部禁止 |
 | 用户禁止 | 自定义绝对不能映射的目录 |
 | 敏感目录 | 标记高风险目录，供 guard 检测 |
-| 只读映射 | 默认只读，避免误修改 |
+| 安全映射（非强制只读） | 使用符号链接映射，避免复制；不提供内核级只读保证 |
 
 ---
 
@@ -76,7 +83,7 @@ Temporary folder mapping tool with security features for AI agents.
 ### Features
 
 - 🔗 Mount external folders into workspace via symlinks
-- 🔒 Read-only mode by default
+- 🔒 Safe mapping (not enforced read-only)
 - 🛡️ System directory protection - blocks dangerous paths
 - 🚫 Drive root protection - blocks all drive mount points (`/mnt/c`, `/mnt/d`, etc.)
 - ⚙️ User-configurable forbidden and sensitive paths
@@ -122,6 +129,13 @@ python3 scripts/map_folder.py guard delete "/path/to/important/file"
 python3 scripts/map_folder.py config
 ```
 
+
+### Notes
+
+- Mapping is implemented via symlinks and is **not** a kernel-enforced read-only mount.
+- Writes, deletes, and renames under mapped paths directly affect the source directory.
+- Run `guard` before high-risk operations when possible.
+
 ### Security
 
 | Mechanism | Description |
@@ -129,7 +143,7 @@ python3 scripts/map_folder.py config
 | Default forbidden | `/`, `/bin`, `/etc`, `/proc`, etc. |
 | Drive root protection | `/mnt/a` to `/mnt/z` all blocked |
 | User configurable | Custom forbidden/sensitive paths |
-| Read-only by default | Prevents accidental modifications |
+| Safe mapping (not enforced read-only) | Uses symlink mapping without kernel-enforced read-only guarantees |
 
 ### License
 
