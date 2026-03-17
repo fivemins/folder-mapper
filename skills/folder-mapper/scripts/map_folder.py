@@ -34,9 +34,6 @@ DEFAULT_FORBIDDEN = [
 for letter in 'abcdefghijklmnopqrstuvwxyz':
     DEFAULT_FORBIDDEN.append(f"/mnt/{letter}")
 
-# Windows 盘符根目录（检测用）
-WINDOWS_DRIVE_LETTERS = [chr(c) for c in range(ord('A'), ord('Z') + 1)]
-
 
 def ensure_workspace_files():
     """确保工作目录存在"""
@@ -181,13 +178,17 @@ def is_path_allowed(path: str) -> tuple:
     if re.match(r'^[A-Za-z]:\\', path_str):
         # 提取盘符
         drive = path_str[0].upper()
-        root_path = f"/mnt/{drive.lower()}"
         # 检查是否映射到盘符根目录
         if path_str[3:] == '' or path_str[3:] == '\\':
             return False, f"禁止映射盘符根目录: {path_str}"
     
     # 检查默认黑名单
     for forbidden in DEFAULT_FORBIDDEN:
+        # "/" 仅阻止根目录本身；其余目录阻止自身及其子目录
+        if forbidden == "/":
+            if path_str == "/":
+                return False, "禁止映射系统目录: /"
+            continue
         if is_same_or_subpath(path_str, forbidden):
             return False, f"禁止映射系统目录: {forbidden}"
     
@@ -252,7 +253,7 @@ def mount_folder(folder_path: str, read_only: bool = True) -> dict:
             "access_path": f"mnt/{link_name}",
             "source": str(path),
             "warning": sensitive_warning,
-            "message": f"✅ 已映射到 mnt/{link_name} (只读模式){sensitive_warning}\n⚠️ 警告：此为符号链接，删除/修改会直接影响原文件！"
+            "message": f"✅ 已映射到 mnt/{link_name} (安全映射模式){sensitive_warning}\n⚠️ 警告：此为符号链接，删除/修改会直接影响原文件！"
         }
         
     except Exception as e:
@@ -344,7 +345,7 @@ def show_usage():
 📁 文件夹映射工具 (用户可配置版)
 
 用法:
-  python3 map_folder.py mount <路径>      映射文件夹（只读）
+  python3 map_folder.py mount <路径>      映射文件夹（安全映射）
   python3 map_folder.py unmount <名称>    取消映射
   python3 map_folder.py list             查看当前映射
   python3 map_folder.py clean            清理所有映射
