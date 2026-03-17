@@ -304,9 +304,7 @@ def unmount_folder(link_name: str) -> dict:
         return {"success": False, "error": f"非法映射名: {reason}"}
 
     link_path = MOUNT_DIR / link_name
-    resolved_link_path = link_path.resolve(strict=False)
-
-    if resolved_link_path.parent != MOUNT_DIR.resolve():
+    if not is_within_mount_dir(link_path):
         return {"success": False, "error": "非法映射路径: 仅允许操作 mnt 目录内的直接子项"}
     
     if not link_path.exists():
@@ -392,8 +390,7 @@ def clean_all() -> dict:
             return {"success": False, "error": f"发现非法映射名 '{name}': {reason}"}
 
         link_path = MOUNT_DIR / name
-        resolved_link_path = link_path.resolve(strict=False)
-        if resolved_link_path.parent != MOUNT_DIR.resolve() or not is_within_mount_dir(link_path):
+        if not is_within_mount_dir(link_path):
             return {"success": False, "error": f"发现越界映射路径，已停止清理: {name}"}
         safe_entries.append((name, link_path))
     
