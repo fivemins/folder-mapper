@@ -279,8 +279,7 @@ def unmount_folder(link_name: str) -> dict:
         if link_path.is_symlink():
             link_path.unlink()
         else:
-            import shutil
-            shutil.rmtree(link_path)
+            return {"success": False, "error": f"映射损坏，请手动检查: {link_name}"}
         
         mappings = load_mappings()
         if link_name in mappings:
@@ -295,6 +294,7 @@ def unmount_folder(link_name: str) -> dict:
 def list_mappings() -> dict:
     ensure_mount_dir()
     mappings = load_mappings()
+    has_anomaly = False
     
     # 如果映射文件为空/损坏，尝试从实际符号链接恢复
     if not mappings and MOUNT_DIR.exists():
@@ -316,16 +316,34 @@ def list_mappings() -> dict:
     stale = []
     for name, info in mappings.items():
         link_path = Path(info["link"])
+        if not link_path.exists():
+            stale.append(name)
+            continue
+
+        if not link_path.is_symlink():
+            stale.append(name)
+            has_anomaly = True
+            continue
+
         if link_path.exists():
             active.append({**info, "name": name})
-        else:
-            stale.append(name)
 
     for name in stale:
         del mappings[name]
+
+    if MOUNT_DIR.exists():
+        for item in MOUNT_DIR.iterdir():
+            if item.is_symlink():
+                continue
+            has_anomaly = True
     
     save_mappings(mappings)
-    return {"active": active, "count": len(active)}
+    return {
+        "active": active,
+        "count": len(active),
+        "has_anomaly": has_anomaly,
+        "warning": "发现异常挂载条目，请人工确认" if has_anomaly else "",
+    }
 
 
 def check_dangerous_operation(path: str, operation: str) -> tuple:
@@ -348,6 +366,7 @@ def clean_all() -> dict:
     ensure_mount_dir()
     mappings = load_mappings()
     
+    warnings = []
     for name in list(mappings.keys()):
         link_path = MOUNT_DIR / name
         try:
@@ -355,13 +374,15 @@ def clean_all() -> dict:
                 if link_path.is_symlink():
                     link_path.unlink()
                 else:
-                    import shutil
-                    shutil.rmtree(link_path)
+                    warnings.append(f"跳过异常条目(非符号链接): {link_path}")
         except OSError:
             continue
     
     save_mappings({})
-    return {"success": True, "message": "已清理所有映射"}
+    message = "已清理所有映射"
+    if warnings:
+        message += "\n发现异常挂载条目，请人工确认"
+    return {"success": True, "message": message, "warnings": warnings}
 
 
 def show_usage():
@@ -411,6 +432,8 @@ def main():
         print(f"\n📁 当前映射 ({result['count']} 个):")
         for m in result['active']:
             print(f"  {m['name']} -> {m['source']}")
+        if result.get("has_anomaly"):
+            print(f"\n⚠️ {result['warning']}")
         
     elif command == "config":
         show_config()
@@ -446,6 +469,8 @@ def main():
     elif command == "clean":
         result = clean_all()
         print(result["message"])
+        for warning in result.get("warnings", []):
+            print(f"⚠️ {warning}")
         
     else:
         show_usage()
