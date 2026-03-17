@@ -42,11 +42,23 @@ python3 scripts/map_folder.py unmount <folder_name>
 # Add directory that cannot be mapped
 python3 scripts/map_folder.py forbid "/path/to/secure"
 
+# Remove forbidden directory
+python3 scripts/map_folder.py allow "/path/to/secure"
+
 # Add directory requiring confirmation for modifications
 python3 scripts/map_folder.py sensitive "/path/to/important"
 
+# Remove sensitive directory
+python3 scripts/map_folder.py desensitive "/path/to/important"
+
 # View configuration
 python3 scripts/map_folder.py config
+```
+
+### Clean all mappings
+
+```bash
+python3 scripts/map_folder.py clean
 ```
 
 ## Security

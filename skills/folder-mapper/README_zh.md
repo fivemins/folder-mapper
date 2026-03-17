@@ -43,8 +43,14 @@ python3 scripts/map_folder.py unmount <文件夹名>
 # 添加禁止映射的目录
 python3 scripts/map_folder.py forbid "/path/to/secure"
 
+# 移除禁止映射的目录
+python3 scripts/map_folder.py allow "/path/to/secure"
+
 # 添加需要二次确认的目录
 python3 scripts/map_folder.py sensitive "/path/to/important"
+
+# 移除敏感目录
+python3 scripts/map_folder.py desensitive "/path/to/important"
 
 # 查看配置
 python3 scripts/map_folder.py config

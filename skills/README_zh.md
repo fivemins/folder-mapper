@@ -40,12 +40,18 @@ python3 scripts/map_folder.py unmount <文件夹名>
 
 ```bash
 python3 scripts/map_folder.py forbid "/path/to/secure"
+
+# 移除禁止目录
+python3 scripts/map_folder.py allow "/path/to/secure"
 ```
 
 ### 配置敏感目录（需要二次确认）
 
 ```bash
 python3 scripts/map_folder.py sensitive "/path/to/important"
+
+# 移除敏感目录
+python3 scripts/map_folder.py desensitive "/path/to/important"
 ```
 
 ### 查看配置
