@@ -6,6 +6,9 @@ import os
 import sys
 import json
 import re
+import fcntl
+import tempfile
+from contextlib import contextmanager
 from pathlib import Path
 
 WORKSPACE = Path.home() / ".openclaw" / "workspace"
@@ -82,71 +85,160 @@ def ensure_workspace_files():
     MOUNT_DIR.mkdir(parents=True, exist_ok=True)
 
 
+def _print_json_warning(file_path: Path, exc: Exception):
+    print(f"⚠️ JSON 解析失败: {file_path} ({type(exc).__name__}: {exc})", file=sys.stderr)
+
+
+def _read_json(path: Path, default):
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        if not content.strip():
+            return default
+        data = json.loads(content)
+        if isinstance(default, dict) and isinstance(data, dict):
+            return data
+        return default
+    except FileNotFoundError:
+        return default
+    except json.JSONDecodeError as e:
+        _print_json_warning(path, e)
+    except OSError as e:
+        print(f"⚠️ 读取失败: {path} ({type(e).__name__}: {e})", file=sys.stderr)
+    return default
+
+
+def _lock_file_path(path: Path) -> Path:
+    return path.parent / f".{path.name}.lock"
+
+
+@contextmanager
+def _locked_file(path: Path, lock_type: int):
+    ensure_workspace_files()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lock_path = _lock_file_path(path)
+    with open(lock_path, 'a+', encoding='utf-8') as lock_handle:
+        fcntl.flock(lock_handle.fileno(), lock_type)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock_handle.fileno(), fcntl.LOCK_UN)
+
+
+def _atomic_write_json(path: Path, payload: dict):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+    try:
+        with os.fdopen(fd, 'w', encoding='utf-8') as tmp_file:
+            json.dump(payload, tmp_file, indent=2)
+            tmp_file.flush()
+            os.fsync(tmp_file.fileno())
+        os.replace(tmp_name, path)
+    finally:
+        if os.path.exists(tmp_name):
+            os.unlink(tmp_name)
+
+
+def _read_json_locked(path: Path, default):
+    with _locked_file(path, fcntl.LOCK_SH):
+        return _read_json(path, default)
+
+
+def _write_json_locked(path: Path, payload: dict):
+    with _locked_file(path, fcntl.LOCK_EX):
+        _atomic_write_json(path, payload)
+
+
+def _update_json_locked(path: Path, default, updater):
+    with _locked_file(path, fcntl.LOCK_EX):
+        data = _read_json(path, default)
+        updated = updater(data)
+        _atomic_write_json(path, updated)
+        return updated
+
+
 def load_config() -> dict:
     """加载用户配置"""
-    ensure_workspace_files()
-    if CONFIG_FILE.exists():
-        try:
-            with open(CONFIG_FILE, 'r') as f:
-                data = json.load(f)
-                if isinstance(data, dict):
-                    return data
-        except (json.JSONDecodeError, OSError):
-            pass
-    return {"forbidden_paths": [], "sensitive_paths": []}
+    return _read_json_locked(CONFIG_FILE, {"forbidden_paths": [], "sensitive_paths": []})
 
 
 def save_config(config: dict):
     """保存用户配置"""
-    ensure_workspace_files()
-    with open(CONFIG_FILE, 'w') as f:
-        json.dump(config, f, indent=2)
+    _write_json_locked(CONFIG_FILE, config)
 
 
 def add_forbidden(path: str) -> dict:
     """添加禁止访问的目录"""
-    config = load_config()
     path = str(Path(path).expanduser().resolve())
-    
-    if path not in config.get("forbidden_paths", []):
-        config.setdefault("forbidden_paths", []).append(path)
-        save_config(config)
+
+    changed = {"value": False}
+
+    def _updater(config: dict):
+        forbidden_paths = config.setdefault("forbidden_paths", [])
+        if path not in forbidden_paths:
+            forbidden_paths.append(path)
+            changed["value"] = True
+        return config
+
+    _update_json_locked(CONFIG_FILE, {"forbidden_paths": [], "sensitive_paths": []}, _updater)
+    if changed["value"]:
         return {"success": True, "message": f"已添加禁止目录: {path}"}
     return {"success": False, "message": "目录已在黑名单中"}
 
 
 def remove_forbidden(path: str) -> dict:
     """移除禁止访问的目录"""
-    config = load_config()
     path = str(Path(path).expanduser().resolve())
-    
-    if path in config.get("forbidden_paths", []):
-        config["forbidden_paths"].remove(path)
-        save_config(config)
+
+    changed = {"value": False}
+
+    def _updater(config: dict):
+        forbidden_paths = config.setdefault("forbidden_paths", [])
+        if path in forbidden_paths:
+            forbidden_paths.remove(path)
+            changed["value"] = True
+        return config
+
+    _update_json_locked(CONFIG_FILE, {"forbidden_paths": [], "sensitive_paths": []}, _updater)
+    if changed["value"]:
         return {"success": True, "message": f"已移除禁止目录: {path}"}
     return {"success": False, "message": "目录不在黑名单中"}
 
 
 def add_sensitive(path: str) -> dict:
     """添加敏感目录（需要二次确认）"""
-    config = load_config()
     path = str(Path(path).expanduser().resolve())
-    
-    if path not in config.get("sensitive_paths", []):
-        config.setdefault("sensitive_paths", []).append(path)
-        save_config(config)
+
+    changed = {"value": False}
+
+    def _updater(config: dict):
+        sensitive_paths = config.setdefault("sensitive_paths", [])
+        if path not in sensitive_paths:
+            sensitive_paths.append(path)
+            changed["value"] = True
+        return config
+
+    _update_json_locked(CONFIG_FILE, {"forbidden_paths": [], "sensitive_paths": []}, _updater)
+    if changed["value"]:
         return {"success": True, "message": f"已添加敏感目录: {path}"}
     return {"success": False, "message": "目录已在敏感列表中"}
 
 
 def remove_sensitive(path: str) -> dict:
     """移除敏感目录"""
-    config = load_config()
     path = str(Path(path).expanduser().resolve())
-    
-    if path in config.get("sensitive_paths", []):
-        config["sensitive_paths"].remove(path)
-        save_config(config)
+
+    changed = {"value": False}
+
+    def _updater(config: dict):
+        sensitive_paths = config.setdefault("sensitive_paths", [])
+        if path in sensitive_paths:
+            sensitive_paths.remove(path)
+            changed["value"] = True
+        return config
+
+    _update_json_locked(CONFIG_FILE, {"forbidden_paths": [], "sensitive_paths": []}, _updater)
+    if changed["value"]:
         return {"success": True, "message": f"已移除敏感目录: {path}"}
     return {"success": False, "message": "目录不在敏感列表中"}
 
@@ -179,22 +271,11 @@ def ensure_mount_dir():
 
 
 def load_mappings() -> dict:
-    ensure_workspace_files()
-    if META_FILE.exists():
-        try:
-            with open(META_FILE, 'r') as f:
-                data = json.load(f)
-                if isinstance(data, dict):
-                    return data
-        except (json.JSONDecodeError, OSError):
-            pass
-    return {}
+    return _read_json_locked(META_FILE, {})
 
 
 def save_mappings(mappings: dict):
-    ensure_workspace_files()
-    with open(META_FILE, 'w') as f:
-        json.dump(mappings, f, indent=2)
+    _write_json_locked(META_FILE, mappings)
 
 
 def is_same_or_subpath(path: str, base: str) -> bool:
@@ -288,13 +369,15 @@ def mount_folder(folder_path: str) -> dict:
     try:
         os.symlink(path, link_path)
         
-        mappings = load_mappings()
-        mappings[link_name] = {
-            "source": str(path),
-            "link": str(link_path),
-            "sensitive": reason == "sensitive",
-        }
-        save_mappings(mappings)
+        def _updater(mappings: dict):
+            mappings[link_name] = {
+                "source": str(path),
+                "link": str(link_path),
+                "sensitive": reason == "sensitive",
+            }
+            return mappings
+
+        _update_json_locked(META_FILE, {}, _updater)
         
         return {
             "success": True,
@@ -333,10 +416,12 @@ def unmount_folder(link_name: str) -> dict:
         else:
             return {"success": False, "error": f"映射损坏，请手动检查: {link_name}"}
         
-        mappings = load_mappings()
-        if link_name in mappings:
-            del mappings[link_name]
-            save_mappings(mappings)
+        def _updater(mappings: dict):
+            if link_name in mappings:
+                del mappings[link_name]
+            return mappings
+
+        _update_json_locked(META_FILE, {}, _updater)
         
         return {"success": True, "message": f"✅ 已解除映射: {link_name}"}
     except FileNotFoundError as e:
@@ -447,7 +532,7 @@ def clean_all() -> dict:
         except OSError:
             continue
     
-    save_mappings({})
+    _update_json_locked(META_FILE, {}, lambda _: {})
     message = "已清理所有映射"
     if warnings:
         message += "\n发现异常挂载条目，请人工确认"
